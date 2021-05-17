@@ -1,6 +1,7 @@
 if (!require("pacman")) install.packages("pacman")
 pkgs =
-  c("here",
+  c("distill",
+    "here",
     "tidyverse")
 
 pacman::p_load(pkgs, character.only = T)

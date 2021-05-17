@@ -1,0 +1,76 @@
+---
+title: "Model specification and prior predictive simulation for ONS smoking and COVID-19 study"
+description: |
+date: "`r Sys.Date()`"
+author:
+  - first_name: "Olga"
+    last_name: "Perski"
+    url: https://www.olgaperski.com
+    orcid_id: 0000-0003-3285-3174
+  - first_name: "David"
+    last_name: "Simons"
+    url: https://www.dsimons.org
+    orcid_id: 0000-0001-9655-1656
+output: 
+  distill::distill_article:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+always_allow_html: yes
+---
+```{r load-library, message=FALSE, warning=FALSE, echo=FALSE}
+source(here::here("scripts", "library.R"))
+```
+
+
+
+```{r reading-data, message=FALSE, warning=FALSE, echo=FALSE}
+
+# Start and end date of the planned analysis.
+start_date = "2020-04-26"
+end_date = "2021-02-28"
+
+
+# Importing gov.uk case data and categorising the segments by date
+
+case_data <- read_csv(here("data", "gov_uk_cases_2021-05-17.csv")) %>%
+  filter(date >= start_date & date <= end_date) %>%
+  mutate(new_case = newCasesBySpecimenDate,
+         Segment_group = factor(case_when(date <= "2020-04-29" ~ "Segment 1",
+                                date > "2020-04-29" & date <= "2020-07-19" ~ "Segment 2",
+                                date > "2020-07-19" & date <= "2020-09-15" ~ "Segment 3",
+                                date > "2020-09-15" & date <= "2020-11-02" ~ "Segment 4",
+                                date > "2020-11-02" & date <= "2020-11-29" ~ "Segment 5",
+                                date > "2020-11-29" & date <= "2020-12-30" ~ "Segment 6",
+                                date > "2020-12-30" & date <= "2021-02-05" ~ "Segment 7",
+                                date > "2021-02-05" & date <= "2021-02-28" ~ "Segment 8",
+                                TRUE ~ "Other"))) %>%
+  select(date, new_case, Segment_group)
+```
+
+
+
+## Selecting Knots
+
+Blah blah blah, we selected knots using the data from specimen collection date.
+
+```{r visualising-data, message=FALSE, warning=FALSE, echo=FALSE}
+plotly::plot_ly(
+  x = case_data$date,
+  y = case_data$new_case,
+  type = "bar"
+)
+```
+
+The knot dates are shown
+
+```{r selecting-knots , message=FALSE, warning=FALSE, echo=FALSE}
+ggplot(case_data, aes(x = date, y = new_case, fill = Segment_group)) +
+  geom_col() +
+  geom_smooth(method = "lm", colour = "black") +
+  theme_minimal() +
+  labs(x = element_blank(),
+       y = "Number of cases",
+       fill = "Segment changes")
+```
+

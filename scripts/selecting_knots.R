@@ -1,37 +1,44 @@
 source(here::here("scripts", "library.R"))
 
+# Used to visually inspect changes in rate of cases
+
+plotly::plot_ly(
+  x = case_data$date,
+  y = case_data$new_case,
+  type = "bar"
+)
+
+# Start and end date of the planned analysis.
 start_date = "2020-04-26"
 end_date = "2021-02-28"
+
+
+# Importing gov.uk case data and categorising the segments by date
 
 case_data <- read_csv(here("data", "cases_2021-05-17.csv")) %>%
   filter(date >= start_date & date <= end_date) %>%
   mutate(date = as.Date(date),
          new_case = newCasesBySpecimenDate,
-         rate_group = factor(case_when(date <= "2020-04-29" ~ "Rate 1",
-                                date > "2020-04-29" & date <= "2020-07-19" ~ "Rate 2",
-                                date > "2020-07-19" & date <= "2020-09-15" ~ "Rate 3",
-                                date > "2020-09-15" & date <= "2020-11-02" ~ "Rate 4",
-                                date > "2020-11-02" & date <= "2020-11-29" ~ "Rate 5",
-                                date > "2020-11-29" & date <= "2020-12-30" ~ "Rate 6",
-                                date > "2020-12-30" & date <= "2021-02-05" ~ "Rate 7",
-                                date > "2021-02-05" & date <= "2021-02-28" ~ "Rate 8",
+         Segment_group = factor(case_when(date <= "2020-04-29" ~ "Segment 1",
+                                date > "2020-04-29" & date <= "2020-07-19" ~ "Segment 2",
+                                date > "2020-07-19" & date <= "2020-09-15" ~ "Segment 3",
+                                date > "2020-09-15" & date <= "2020-11-02" ~ "Segment 4",
+                                date > "2020-11-02" & date <= "2020-11-29" ~ "Segment 5",
+                                date > "2020-11-29" & date <= "2020-12-30" ~ "Segment 6",
+                                date > "2020-12-30" & date <= "2021-02-05" ~ "Segment 7",
+                                date > "2021-02-05" & date <= "2021-02-28" ~ "Segment 8",
                                 TRUE ~ "Other"))) %>%
-  select(date, new_case, rate_group)
+  select(date, new_case, Segment_group)
 
-ggplot(case_data, aes(x = date, y = new_case, fill = rate_group)) +
+# Plotting the segments to visually inspect trend
+
+ggplot(case_data, aes(x = date, y = new_case, fill = Segment_group)) +
   geom_col() +
   geom_smooth(method = "lm", colour = "black") +
   theme_minimal() +
   labs(x = element_blank(),
        y = "Number of cases",
-       fill = "Rate changes")
-
-plotly::plot_ly(
-  x = case_data$date,
-  y = case_data$new_case,
-  color = case_data$rate_group,
-  type = "bar"
-)
+       fill = "Segment changes")
 
 
 
