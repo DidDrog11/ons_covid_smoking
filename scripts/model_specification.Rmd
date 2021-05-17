@@ -11,12 +11,29 @@ author:
     last_name: "Simons"
     url: https://www.dsimons.org
     orcid_id: 0000-0001-9655-1656
+  - first_name: "Harry"
+    last_name: "Tattan-Birch"
+    url: https://scholar.google.com/citations?user=4a9fp18AAAAJ&hl=en
+    orcid_id: 0000-0001-9410-8343
+  - first_name: "Emma"
+    last_name: "Beard"
+    url: https://www.ucl.ac.uk/pals/people/emma-beard
+    orcid_id: 0000-0001-8586-1261
+  - first_name: "Lion"
+    last_name: "Shahab"
+    url: https://www.ucl.ac.uk/epidemiology-health-care/people/shahab
+    orcid_id: 0000-0003-4033-442X
+  - first_name: "Jamie"
+    last_name: "Brown"
+    url: https://www.ucl.ac.uk/pals/people/jamie-brown
+    orcid_id: 0000-0002-2797-5428
 output: 
   distill::distill_article:
     toc: true
     toc_depth: 3
     toc_float: true
 always_allow_html: yes
+bibliography: "`r here::here('references', 'reference_model_specification.bib')`"
 ---
 ```{r load-library, message=FALSE, warning=FALSE, echo=FALSE}
 source(here::here("scripts", "library.R"))
@@ -28,7 +45,7 @@ source(here::here("scripts", "library.R"))
 
 # Start and end date of the planned analysis.
 start_date = "2020-04-26"
-end_date = "2021-02-28"
+end_date = "2021-01-31"
 
 
 # Importing gov.uk case data and categorising the segments by date
@@ -42,19 +59,20 @@ case_data <- read_csv(here("data", "gov_uk_cases_2021-05-17.csv")) %>%
                                 date > "2020-09-15" & date <= "2020-11-02" ~ "Segment 4",
                                 date > "2020-11-02" & date <= "2020-11-29" ~ "Segment 5",
                                 date > "2020-11-29" & date <= "2020-12-30" ~ "Segment 6",
-                                date > "2020-12-30" & date <= "2021-02-05" ~ "Segment 7",
-                                date > "2021-02-05" & date <= "2021-02-28" ~ "Segment 8",
+                                date > "2020-12-30" & date <= "2021-01-31" ~ "Segment 7",
                                 TRUE ~ "Other"))) %>%
   select(date, new_case, Segment_group)
 ```
 
 
 
-## Selecting Knots
+## Selecting the number of knots for cubic spline terms
 
-Blah blah blah, we selected knots using the data from specimen collection date.
+Time in the pandemic will be entered as cubic spline terms with a) 8 knots and b) 11 knots (i.e. months in the pandemic).
 
-```{r visualising-data, message=FALSE, warning=FALSE, echo=FALSE}
+The selection of a) was based on the visual inspection of the dynamics of positive tests in the UK (i.e. date of specimen collection), using data from [the UK Government COVID-19 Dashboard](https://coronavirus.data.gov.uk/details/cases):
+
+```{r visualising-data, fig.cap="UK COVID-19 case data by specimen date from 2020-04-26 to 2021-01-31.", message=FALSE, warning=FALSE, echo=FALSE}
 plotly::plot_ly(
   x = case_data$date,
   y = case_data$new_case,
@@ -62,9 +80,9 @@ plotly::plot_ly(
 )
 ```
 
-The knot dates are shown
+Inflection points (or knots) were selected through visual inspection. Time points at which cases were rising (or falling) were grouped into segments, with the transition from one segment to the next representing a knot, resulting in a total of 8 knots. Linear lines of best fit were drawn between the knots to illustrate (see Figure \@ref(fig:selecting-knots)).
 
-```{r selecting-knots , message=FALSE, warning=FALSE, echo=FALSE}
+```{r selecting-knots, fig.cap="Segments used to select the number of knots.", message=FALSE, warning=FALSE, echo=FALSE}
 ggplot(case_data, aes(x = date, y = new_case, fill = Segment_group)) +
   geom_col() +
   geom_smooth(method = "lm", colour = "black") +
@@ -72,5 +90,138 @@ ggplot(case_data, aes(x = date, y = new_case, fill = Segment_group)) +
   labs(x = element_blank(),
        y = "Number of cases",
        fill = "Segment changes")
+```
+
+## Prior predictive simulations for RQs 1-4
+
+### RQ1 - current vs. never smoking
+
+Our living review found that the relative risk of SARS-CoV-2 infection in current smokers was 29% lower than in never smokers (RR = 0.71, CrI = 0.61, 0.82). Therefore, we will use an informative prior for current smokers with the mean set to the logarithm of 0.71 and the standard deviation set to the logarithm of the upper CrI minus the logarithm of the lower CrI divided by 3.92, i.e. *normal*(-0.34, 0.08). As priors are defined on the linear scale, we will use the logarithm of the relative risk. We will further use a weakly informative prior for never smokers. We will specify the distribution as *normal*(0, 2.5), which rules out implausibly large effects and the centering on zero means that negative and positive values are equally plausible (see Figure \@ref(fig:RQ1-prior)).
+
+```{r RQ1-prior, fig.cap="Histogram of the prior predictions for the proportion of current and never smokers testing positive for SARS-CoV-2 infection, simulated from 10,000 samples with parameters on the logit scale. The inverse logit function was applied to obtain probabilities.", echo=T, warning=FALSE}
+
+rq1_mean <- log(0.71)
+rq1_sd <- (log(0.82)-log(0.61))/3.92
+
+rq1_csmok <- inv.logit(rnorm(10000,mean=rq1_mean, sd=rq1_sd))
+
+rq1_nsmok <- inv.logit(rnorm(10000,mean=0, sd=0.25))
+
+dat_rq1 <- tibble(proportion = c(rq1_csmok, rq1_nsmok),
+              smok_status = c(rep("Current smokers", 10000),
+                              rep("Never smokers", 10000)))
+
+ggplot(dat_rq1) +
+  geom_histogram(aes(x = proportion)) +
+  facet_wrap(~ smok_status) +
+  theme_minimal() +
+  theme(panel.border=element_rect(colour = "black", size = 1, fill = NA)) +
+  labs(y = element_blank(),
+      x = "Proportion testing positive for SARS-CoV-2")
+```
+
+
+### RQ2 - former vs. never smoking
+
+Our living review has shown that the relative risk of SARS-CoV-2 infection in former smokers was 3% greater than in never smokers (RR = 1.03, CrI = 0.95, 1.11). We will use an informative prior with the mean set to the logarithm of 1.03 and the standard deviation set to the logarithm of the upper CrI minus the logarithm of the lower CrI divided by 3.92, i.e. *normal*(0.03, 0.04). We will further use a weakly informative prior for never smokers. We will specify the distribution as *normal*(0, 2.5) (see Figure \@ref(fig:RQ2-prior)).
+
+```{r RQ2-prior, fig.cap="Histogram of the prior predictions for the proportion of former and never smokers testing positive for SARS-CoV-2 infection, simulated from 10,000 samples with parameters on the logit scale. The inverse logit function was applied to obtain probabilities.", echo=T, warning=F}
+
+rq2_mean <- log(1.03)
+rq2_sd <- (log(1.11)-log(0.95))/3.92
+
+rq2_fsmok <- inv.logit(rnorm(10000,mean=rq2_mean, sd=rq2_sd))
+
+rq2_nsmok <- inv.logit(rnorm(10000,mean=0, sd=0.25))
+
+dat_rq2 <- tibble(proportion = c(rq2_fsmok, rq2_nsmok),
+                  smok_status = c(rep("Former smokers", 10000),
+                                  rep("Never smokers", 10000)))
+
+ggplot(dat_rq2) +
+  geom_histogram(aes(x = proportion)) +
+  facet_wrap(~ smok_status) +
+  theme_minimal() +
+  theme(panel.border=element_rect(colour = "black", size = 1, fill = NA)) +
+  labs(y = element_blank(),
+       x = "Proportion testing positive for SARS-CoV-2")
+
+```
+
+
+### RQ3 - nicotine users who smoke tobacco vs. nicotine users who do not smoke tobacco
+
+Evidence on the risk of SARS-CoV-2 infection in nicotine users who smoke tobacco (vs. not) is lacking. For this comparison, we will therefore use the same informative prior as above for current smokers. The same prior will be used for nicotine users who smoke tobacco and nicotine users who do not smoke tobacco (see Figure \@ref(fig:RQ3-prior)). 
+
+```{r RQ3-prior, fig.cap="Histogram of the prior predictions for the proportion of nicotine users who smoke and nicotine users who do not smoke testing positive for SARS-CoV-2 infection, simulated from 10,000 samples with parameters on the logit scale. The inverse logit function was applied to obtain probabilities.", echo=T, warning=F}
+
+rq3_mean <- log(0.71)
+rq3_sd <- (log(0.82)-log(0.61))/3.92
+
+rq3_nicsmok <- inv.logit(rnorm(10000,mean=rq3_mean, sd=rq3_sd))
+
+rq3_nic <- inv.logit(rnorm(10000,mean=rq3_mean, sd=rq3_sd))
+
+dat_rq3 <- tibble(proportion = c(rq3_nicsmok, rq3_nic),
+                  smok_status = c(rep("Nicotine users who smoke", 10000),
+                                  rep("Nicotine users", 10000)))
+
+ggplot(dat_rq3) +
+  geom_histogram(aes(x = proportion)) +
+  facet_wrap(~ smok_status) +
+  theme_minimal() +
+  theme(panel.border=element_rect(colour = "black", size = 1, fill = NA)) +
+  labs(y = element_blank(),
+       x = "Proportion testing positive for SARS-CoV-2")
+
+```
+
+
+### RQ4 - nicotine use vs. no nicotine use among people who do not smoke tobacco
+
+For the comparison of nicotine use vs. no nicotine use among people who do not currently smoke, we will use the same informative prior as for current smokers for the nicotine users, reflecting the hypothesis that the 'protective' effect observed in current smokers is conferred by active nicotine use (rather than tobacco). For former and never smokers who do not use nicotine, we will use an informative prior with the mean set to the midpoint of the relative risk for never smokers (i.e. RR = 1.0) and former smokers (i.e. RR = 1.03), i.e. RR = 1.015. As there is a lack of evidence for this comparison, a larger standard deviation will be specified (see Figure \@ref(fig:RQ4-prior)).
+
+```{r RQ4-prior, fig.cap="Histogram of the prior predictions for the proportion of nicotine users and those who do not use nicotine among people who do not smoke tobacco testing positive for SARS-CoV-2 infection, simulated from 10,000 samples with parameters on the logit scale. The inverse logit function was applied to obtain probabilities.", echo=T, warning=F}
+
+rq4a_mean <- log(0.71)
+rq4a_sd <- (log(0.82)-log(0.61))/3.92
+
+rq4b_mean <- log(1.015)
+
+rq4_nic <- inv.logit(rnorm(10000,mean=rq4a_mean, sd=rq4a_sd))
+
+rq4_nonic <- inv.logit(rnorm(10000,mean=rq4b_mean, sd=0.25))
+
+dat_rq4 <- tibble(proportion = c(rq4_nic, rq4_nonic),
+                  smok_status = c(rep("Nicotine use", 10000),
+                                  rep("No nicotine use", 10000)))
+
+ggplot(dat_rq4) +
+  geom_histogram(aes(x = proportion)) +
+  facet_wrap(~ smok_status) +
+  theme_minimal() +
+  theme(panel.border=element_rect(colour = "black", size = 1, fill = NA)) +
+  labs(y = element_blank(),
+       x = "Proportion testing positive for SARS-CoV-2")
+
+```
+
+
+### Covariates
+
+For covariates, weakly informative priors will be used. We will specify a normal distribution with a mean of 0 and standard deviation of 2.5. Continuous normally distributed variables will be standardised. As we cannot be too sure about the intercept [@laurent_smeets_wambs_2019], we will specify a Cauchy distribution with a shape parameter of 10 (see Figure \@ref(fig:cauchy)).
+
+```{r cauchy, fig.cap="Illustration of Cauchy distribution.", echo=T, warning=F}
+
+ggplot(data.frame(x = c(-5, 5)), aes(x)) +
+  stat_function(fun = dcauchy, n = 1e4, args = list(location = 0, scale = 10), aes(color = "a"), size = 2) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0.05)) +
+  scale_color_discrete(name = "",
+                       labels = c("a" = expression(x[0] == 0*","~ gamma == 10))) +
+  ylab("") +
+  theme_bw(base_size = 24) +
+  theme(legend.position = c(0.8, 0.8),
+        legend.text.align = 0)
 ```
 
